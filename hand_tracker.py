@@ -1,23 +1,23 @@
 import math
-import os #checks if the model file exists (hand_landmarker.task)
+import os #checks if the model file exists (gesture_recognizer.task)
 import time #FPS counter
 import urllib.request #downloads the model file if it doesn't exist
 import cv2 #webcam, drawing and gives us the window
 import mediapipe as mp #loads the MediaPipe library and gives it the short name mp, so we can write mp.Image(..) instead of mediapipe.Image(...)
 from mediapipe.tasks import python as mp_python #(model file loading)
-from mediapipe.tasks.python import vision # HandLandmarker lives here
+from mediapipe.tasks.python import vision # the task classes live here
 
-MODEL_PATH = "hand_landmarker.task"
+MODEL_PATH = "gesture_recognizer.task"
 MODEL_URL = (
     "https://storage.googleapis.com/mediapipe-models/"
-    "hand_landmarker/hand_landmarker/float16/latest/hand_landmarker.task")
+    "gesture_recognizer/gesture_recognizer/float16/latest/gesture_recognizer.task")
 
     # ^
     # the pip (python package installer) contains the code only, so the trained neural network has to be downloaded separately
     # in other words, the tasks api has to work with a neural network that needs to be downloaded.
 
 if not os.path.exists(MODEL_PATH):
-    print("Downloading hand_landmarker.task (one time, ~8 MB)...")
+    print("Downloading gesture_recognizer.task (one time)...")
     urllib.request.urlretrieve(MODEL_URL, MODEL_PATH)
     print("Done.")
 
@@ -27,7 +27,7 @@ HAND_CONNECTIONS = [
     (5, 9), (9, 10), (10, 11), (11, 12),     # middle
     (9, 13), (13, 14), (14, 15), (15, 16),   # ring
     (13, 17), (17, 18), (18, 19), (19, 20),  # pinky
-    (0, 17),                                  # palm edge
+    (0, 17),                                 # palm base
 ]
 
 # ^
@@ -39,7 +39,18 @@ FINGERS = {"Index" : (8, 6), "Middle": (12, 10), "Ring": (16, 14), "Pinky": (20,
 #^
 #python tuples with our own declarations
 
-options = vision.HandLandmarkerOptions(
+
+FRIENDLY = {
+    "Closed_Fist": "Fist",
+    "Open_Palm": "Open palm",
+    "Pointing_Up": "Pointing up",
+    "Thumb_Down": "Thumbs down",
+    "Thumb_Up": "Thumbs up",
+    "Victory": "Peace / Victory",
+    "ILoveYou": "I love you",
+    "None": "Unknown",
+}
+options = vision.GestureRecognizerOptions(
     base_options=mp_python.BaseOptions(model_asset_path=MODEL_PATH),#video mode: mediapipe tracks hands across frames,It needs a timestamp that
     #always increases
     #other modes: IMAGE (single pictures) and LIVE_STREAM
@@ -50,10 +61,10 @@ options = vision.HandLandmarkerOptions(
     min_hand_presence_confidence=0.5,     # "is a hand still there?" threshold
     min_tracking_confidence=0.5,          # below this, it re-runs detection
 )
-landmarker = vision.HandLandmarker.create_from_options(options)
+recognizer = vision.GestureRecognizer.create_from_options(options)
 
 def dist(a, b):
-    #Return the distance between two landmarks. (in normalized units)
+    #return the distance between two landmarks (in normalized units)
     return math.hypot(a.x - b.x, a.y - b.y)
 
 def count_fingers(lm): #lm short for landmarks
@@ -75,11 +86,9 @@ def count_fingers(lm): #lm short for landmarks
     return up
 
 def draw_hand(frame, lm, color):
-    #Draw skeleton lines then joint dots on `frame` (modified in place).
+    #draw skeleton lines then joint dots on `frame` (modified in place).
     h, w, _ = frame.shape
 
-    #LMs (landmarks) are NORMALIZED (0.0-1.0 relative to image width/height).
-    #multiply by the frame size to get pixel coordinates.
     pts = [(int(p.x * w), int(p.y * h)) for p in lm]
 
     for a, b in HAND_CONNECTIONS:
@@ -116,16 +125,21 @@ def main():
 
         #timestamp in milliseconds, strictly increasing (required in video mode).
         timestamp_ms = int((time.time() - start) * 1000)
-        result = landmarker.detect_for_video(mp_image, timestamp_ms)
+        # NEW: recognize_for_video replaces detect_for_video and also returns the gestures
+        result = recognizer.recognize_for_video(mp_image, timestamp_ms)
 
         #`result` holds parallel lists, one entry per detected hand:
         #result.hand_landmarks -> 21 normalized (x, y, z) points
-        #result.handedness     -> "Left"/"Right" + confidence score
+        #result.handedness     -> "left"/"right" + confidence score
         #(z = depth relative to the wrist; smaller = closer to the camera.)
-        for lm, handed in zip(result.hand_landmarks, result.handedness):
+
+        for lm, handed, gestures in zip(result.hand_landmarks, result.handedness, result.gestures):
             label = handed[0].category_name            #"left" or "right"
             score = handed[0].score
             color = (0, 200, 0) if label == "Right" else (255, 120, 0)
+
+            gesture = gestures[0]
+            sign = FRIENDLY.get(gesture.category_name, gesture.category_name)
 
             pts = draw_hand(frame, lm, color)
             fingers = count_fingers(lm)
@@ -140,6 +154,12 @@ def main():
                         (x - 60, y + 30), cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
             cv2.putText(frame, f"pinch: {pinch_px:.0f}px",
                         (x - 60, y + 55), cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
+            cv2.putText(frame, f"sign: {sign} ({gesture.score:.2f})",
+                        (x - 60, y + 80), cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
+
+            if gesture.category_name == "Thumb_Up":
+                cv2.putText(frame, "NICE!", (10, 70),
+                            cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 255, 255), 3)
 
         
         now = time.time()
@@ -155,7 +175,8 @@ def main():
    
     cap.release()
     cv2.destroyAllWindows()
-    landmarker.close()
+    # NEW: close the recognizer instead of the landmarker
+    recognizer.close()
 
 
 if __name__ == "__main__":
