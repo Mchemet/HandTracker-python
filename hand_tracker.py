@@ -85,6 +85,12 @@ def count_fingers(lm): #lm short for landmarks
         up.append("Thumb")
     return up
 
+def is_heart(lm1, lm2):
+    size = dist(lm1[0], lm1[9])   # NEW: hand size (wrist to middle knuckle), so the check works at any distance from the camera
+    thumbs_touch = dist(lm1[4], lm2[4]) < 0.5 * size
+    index_touch = dist(lm1[8], lm2[8]) < 0.5 * size
+    return thumbs_touch and index_touch
+
 def draw_hand(frame, lm, color):
     #draw skeleton lines then joint dots on `frame` (modified in place).
     h, w, _ = frame.shape
@@ -137,6 +143,13 @@ def main():
             label = handed[0].category_name            #"left" or "right"
             score = handed[0].score
             color = (0, 200, 0) if label == "Right" else (255, 120, 0)
+            if len(fingers) == 5:
+                    cv2.putText(frame, "STOP", (10, 110),
+                            cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 0, 255), 4)
+
+            if gesture.category_name == "Thumb_Down":
+                cv2.putText(frame, "THUMBS DOWN", (10, 160),
+                            cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 0, 255), 3)
 
             gesture = gestures[0]
             sign = FRIENDLY.get(gesture.category_name, gesture.category_name)
@@ -148,7 +161,10 @@ def main():
             pinch_px = math.hypot(pts[4][0] - pts[8][0], pts[4][1] - pts[8][1])
             cv2.line(frame, pts[4], pts[8], (0, 0, 255), 2)
 
-        
+
+            if len(result.hand_landmarks) == 2 and is_heart(result.hand_landmarks[0], result.hand_landmarks[1]):
+                cv2.putText(frame, "HEART <3", (10, 210),
+                        cv2.FONT_HERSHEY_SIMPLEX, 1.5, (180, 0, 255), 4)
             x, y = pts[0]
             cv2.putText(frame, f"{label} ({score:.2f})  fingers: {len(fingers)}",
                         (x - 60, y + 30), cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
@@ -158,7 +174,7 @@ def main():
                         (x - 60, y + 80), cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
 
             if gesture.category_name == "Thumb_Up":
-                cv2.putText(frame, "NICE!", (10, 70),
+                cv2.putText(frame, "Thumb up! :)", (10, 70),
                             cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 255, 255), 3)
 
         
@@ -175,7 +191,6 @@ def main():
    
     cap.release()
     cv2.destroyAllWindows()
-    # NEW: close the recognizer instead of the landmarker
     recognizer.close()
 
 
