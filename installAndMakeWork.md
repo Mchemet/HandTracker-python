@@ -41,5 +41,4 @@ python hand_tracker.py
 
 # Common problems
 
-note :this program was made on an archlinux machine. any errors from MacOS or Windows should be
-reported to the owner of this repo.
+note :this program was made on an archlinux machine. any errors from MacOS or Windows should be reported to the owner of this repo.
