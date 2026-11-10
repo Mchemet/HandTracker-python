@@ -1,8 +1,11 @@
 import math
 import os #checks if the model file exists (gesture_recognizer.task)
 import time #FPS counter
+
 import urllib.request #downloads the model file if it doesn't exist
+
 import cv2 #webcam, drawing and gives us the window
+
 import mediapipe as mp #loads the MediaPipe library and gives it the short name mp, so we can write mp.Image(..) instead of mediapipe.Image(...)
 from mediapipe.tasks import python as mp_python #(model file loading)
 from mediapipe.tasks.python import vision # the task classes live here
@@ -106,8 +109,6 @@ def draw_hand(frame, lm, color):
         cv2.circle(frame, (x, y), r, color, 1)
     return pts
 
-#main loop :
-
 def main():
     cap = cv2.VideoCapture(0)             
     if not cap.isOpened():
@@ -131,7 +132,6 @@ def main():
 
         #timestamp in milliseconds, strictly increasing (required in video mode).
         timestamp_ms = int((time.time() - start) * 1000)
-        # NEW: recognize_for_video replaces detect_for_video and also returns the gestures
         result = recognizer.recognize_for_video(mp_image, timestamp_ms)
 
         #`result` holds parallel lists, one entry per detected hand:
@@ -192,7 +192,6 @@ def main():
     cap.release()
     cv2.destroyAllWindows()
     recognizer.close()
-
 
 if __name__ == "__main__":
     main()
